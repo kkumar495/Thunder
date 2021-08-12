@@ -1316,7 +1316,7 @@ namespace RPC {
                 Revoke((*loop)->Parent(), (*loop)->InterfaceId());
                 // To avoid race conditions, the creation of the deadProxies took a reference
                 // on the interfaces, we presented here. Do not forget to release this reference.
-                (*loop)->Parent()->Release();
+                delete (*loop)->Parent();
                 loop++;
             }
         }

@@ -182,6 +182,13 @@ namespace ProxyStub {
 
             return(result);
         }
+        uint32_t RefCount() const {
+           uint32_t refCount;
+            _adminLock.Lock();
+            refCount = _refCount;
+            _adminLock.Unlock();
+            return refCount;
+        }
         void AddRef() const {
             _adminLock.Lock();
             _refCount++;
@@ -222,10 +229,9 @@ namespace ProxyStub {
                 _adminLock.Unlock();
 
                 // Remove our selves from the Administration, we are done..
-                RPC::Administrator::Instance().UnregisterProxy(*this);
-
-                result = Core::ERROR_DESTRUCTION_SUCCEEDED;
+                result = RPC::Administrator::Instance().UnregisterProxy(*this);
             }
+
             return (result);
         }
         inline void* RemoteInterface(const uint32_t id) const
