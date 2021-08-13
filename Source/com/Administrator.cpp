@@ -19,6 +19,7 @@
 
 #include "Administrator.h"
 #include "IUnknown.h"
+#include "plugins/IShell.h"
 
 namespace WPEFramework {
 namespace RPC {
@@ -287,12 +288,40 @@ namespace RPC {
     {
         _adminLock.Lock();
 
+	ChannelMap::iterator index(_channelProxyMap.find(channel.operator->()));
+
+        if (index != _channelProxyMap.end()) {
+            ProxyList::iterator loop(index->second.begin());
+            while (loop != index->second.end()) {
+                // There is a small possibility that the last reference to this proxy
+                // interface is released in the same time before we report this interface
+                // to be dead. So lets keep a refernce so we can work on a real object
+                // still. This race condition, was observed by customer testing.
+                (*loop)->AddRef();
+                pendingProxies.push_back(*loop);
+                loop++;
+            }
+	    index->second.clear();
+            _channelProxyMap.erase(index);
+        }
+
+
         ReferenceMap::iterator remotes(_channelReferenceMap.find(channel.operator->()));
 
         if (remotes != _channelReferenceMap.end()) {
             std::list<RecoverySet>::iterator loop(remotes->second.begin());
             while (loop != remotes->second.end()) {
                 uint32_t result = Core::ERROR_NONE;
+
+		std::list<ProxyStub::UnknownProxy*>::const_iterator index(pendingProxies.begin());
+                while (index != pendingProxies.end()) {
+                    Core::IUnknown* iface = loop->Unknown();
+		    /* FIXME: just added to ensure the issue is not there, once it removed */
+                    if (iface != nullptr && (loop->Id() == PluginHost::IShell::ID)) {
+	                (reinterpret_cast<PluginHost::IShell*>(iface))->Unregister(reinterpret_cast<PluginHost::IPlugin::INotification*>((*index)->Parent()));
+		    }
+                    index++;
+                }
 
                 // We will release on behalf of the other side :-)
                 do {
@@ -310,22 +339,6 @@ namespace RPC {
                 loop++;
             }
             _channelReferenceMap.erase(remotes);
-        }
-
-        ChannelMap::iterator index(_channelProxyMap.find(channel.operator->()));
-
-        if (index != _channelProxyMap.end()) {
-            ProxyList::iterator loop(index->second.begin());
-            while (loop != index->second.end()) {
-                // There is a small possibility that the last reference to this proxy
-                // interface is released in the same time before we report this interface
-                // to be dead. So lets keep a refernce so we can work on a real object
-                // still. This race condition, was observed by customer testing.
-                (*loop)->AddRef();
-                pendingProxies.push_back(*loop);
-
-                loop++;
-            }
         }
 
         _adminLock.Unlock();
